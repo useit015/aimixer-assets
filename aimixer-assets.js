@@ -15,6 +15,13 @@ const luxon = require('luxon');
 const { v4: uuidv4 } = require('uuid');
 const jwt = require('jsonwebtoken');
 
+const serp = require('./utils/serpWow');
+const s3 = require('./utils/s3');
+const ai = require('./utils/ai');
+const urlUtil = require('./utils/url')
+const proxycurl = require('./utils/proxycurl');
+const auth = require('./utils/auth')
+
 const { MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE, JWT_PASSWORD } = process.env;
 
 const mysqlOptions = {
@@ -50,7 +57,58 @@ app.use(cors());
 
 app.get('/', (req, res) => {
     res.send('Hello, World!');
+    
 });
+
+
+const handleQuery = async (req, res) => {
+  console.log(req.body);
+  const {type, query, timePeriod, token } = req.body;
+
+  if (!token) return res.status(400).json('bad request');
+
+  /*
+   * auth here
+   */
+
+  let result;
+  switch (type) {
+      case 'google_search_news':
+          result = await serp.google('news', query, timePeriod, 50);
+          if (result === false) return res.status(500).json('internal server error');
+          return res.status(200).json(result);
+          break;
+      case 'google_search_web':
+          result = await serp.google('web', query, timePeriod, 50);
+          if (result === false) return res.status(500).json('internal server error');
+          return res.status(200).json(result);
+          break;
+      case 'google_search_video':
+          result = await serp.google('videos', query, timePeriod, 50);
+          if (result === false) return res.status(500).json('internal server error');
+          return res.status(200).json(result);
+          break;
+      case "pymnts_search_news":
+          result = await serp.google('news', query + ' site:pymnts.com', timePeriod, 50);
+          if (result === false) return res.status(500).json('internal server error');
+          return res.status(200).json(result);
+          break;
+      case "pymnts_search_web":
+          result = await serp.google('web', query + ' site:pymnts.com', timePeriod, 50);
+          if (result === false) return res.status(500).json('internal server error');
+          return res.status(200).json(result);
+          break;
+      case "pymnts_search_video":
+          result = await serp.google('videos', query + ' site:pymnts.com', timePeriod, 50);
+          if (result === false) return res.status(500).json('internal server error');
+          return res.status(200).json(result);
+          break;
+      default:
+          res.status(400).json('bad command');
+  }
+}
+
+app.post('/query', (req, res) => handleQuery(req, res));
 
 const httpsServer = https.createServer({
     key: fs.readFileSync(privateKeyPath),

@@ -9,14 +9,24 @@
   "author": "Michael Wood",
   "license": "SEE LICENSE IN license.md",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.387.0",
+    "@aws-sdk/s3-request-presigner": "^3.387.0",
+    "@extractus/article-extractor": "^7.3.1",
+    "axios": "^1.4.0",
     "bcrypt": "^5.1.0",
+    "cheerio": "^1.0.0-rc.12",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
+    "fs-extra": "^11.1.1",
+    "html-to-text": "^9.0.5",
+    "html2plaintext": "^2.1.4",
     "https": "^1.0.0",
     "jsonwebtoken": "^9.0.1",
     "luxon": "^3.4.0",
     "mysql2": "^3.6.0",
+    "node-html-parser": "^6.1.5",
+    "openai": "^3.3.0",
     "uuid": "^9.0.0"
   }
 }
