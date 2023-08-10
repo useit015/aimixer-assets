@@ -13,6 +13,15 @@ const { SCRAPERAPI_KEY } = process.env;
 
 //const url = 'https://www.pymnts.com/news/retail/2023/will-consumers-pay-50-for-drugstore-brand-sunscreen/';
 
+exports.isValidUrl = url => {
+  try {
+    let info = new URL(url);
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
 exports.urlType = url => {
     //console.log('urlType', url);
 
@@ -27,7 +36,22 @@ exports.urlType = url => {
     return extension;
 }
 
-exports.getHTML = async (url, debugMe = false) => {
+exports.getHTML = async url => {
+  const request = {
+    url,
+    method:'get'
+  }
+
+  try {
+    const response = await axios(request);
+    return response.data;
+  } catch(err) {
+    console.error(err);
+    return false;
+  }
+}
+
+exports.scrapeHTML = async (url, debugMe = false) => {
   console.log('url getHTML', url);
   let request = {
       url: 'http://api.scraperapi.com?country_code=us&device_type=desktop',
@@ -40,14 +64,15 @@ exports.getHTML = async (url, debugMe = false) => {
         "Content-Type": "application/json"
       }
     }
+
+    console.log(request);
   
     let response;
   
     try {
       response = await axios(request);
     } catch (err) {
-      if (err.response && err.response.status) console.error('getHTML error:', err.response.status, err.response.status.text);
-      else console.error('getHTML error:', err);
+      console.log('Error getHTML', url);
       return false;
     }
 

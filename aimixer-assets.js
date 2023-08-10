@@ -21,6 +21,7 @@ const ai = require('./utils/ai');
 const urlUtil = require('./utils/url')
 const proxycurl = require('./utils/proxycurl');
 const auth = require('./utils/auth')
+const textConversion = require('./utils/textConversion');
 
 const { MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE, JWT_PASSWORD } = process.env;
 
@@ -59,7 +60,6 @@ app.get('/', (req, res) => {
     res.send('Hello, World!');
     
 });
-
 
 const handleQuery = async (req, res) => {
   console.log(req.body);
@@ -108,7 +108,34 @@ const handleQuery = async (req, res) => {
   }
 }
 
+const handleUrlToText = async (req, res) => {
+  const { url } = req.body;
+
+  if (!url) return res.status(400).json('bad request');
+
+  if (!urlUtil.isValidUrl(url)) return res.status(402).json('bad request');
+
+  const urlType = urlUtil.urlType(url);
+
+  let text = '';
+  switch (urlType) {
+
+    case 'html':
+      const info = await textConversion.htmlToText(url);
+      info.status = 'success';
+      return res.status(200).json(info);
+      break;
+
+    default:
+      console.error('Unknown URL Type: ', urlType);
+      return res.status(500).json({status: 'error', msg: `unknown url type: ${urlType}`});
+  }
+
+  return res.status(200).send(text);
+}
+
 app.post('/query', (req, res) => handleQuery(req, res));
+app.post('/urlToText', (req, res) => handleUrlToText(req, res));
 
 const httpsServer = https.createServer({
     key: fs.readFileSync(privateKeyPath),
