@@ -16,6 +16,21 @@ const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
 const {S3_ENDPOINT, S3_ENDPOINT_DOMAIN, S3_REGION, S3_KEY, S3_SECRET, S3_BUCKET} = process.env;
 
+exports.client = (S3_ENDPOINT, S3_ENDPOINT_DOMAIN, S3_REGION, S3_KEY, S3_SECRET, S3_BUCKET) => {
+  const client = new S3({
+      endpoint: S3_ENDPOINT,
+      region: S3_REGION,
+      credentials: {
+          accessKeyId: S3_KEY,
+          secretAccessKey: S3_SECRET
+      }
+  });
+  client.meta = {S3_ENDPOINT, S3_ENDPOINT_DOMAIN, S3_REGION, S3_KEY, S3_SECRET, S3_BUCKET}
+  return client;
+}
+
+const s3Client = exports.client(S3_ENDPOINT, S3_ENDPOINT_DOMAIN, S3_REGION, S3_KEY, S3_SECRET, S3_BUCKET);
+
 exports.emptyS3Directory = async (dir, s3Client) => {
   const Bucket = s3Client.meta.S3_BUCKET;
   const listParams = {
@@ -132,18 +147,7 @@ exports.eraseFolder = async (s3Client, folder) => {
     if (listedObjects.IsTruncated) await this.eraseFolder(folder);
 }
 
-exports.client = (S3_ENDPOINT, S3_ENDPOINT_DOMAIN, S3_REGION, S3_KEY, S3_SECRET, S3_BUCKET) => {
-    const client = new S3({
-        endpoint: S3_ENDPOINT,
-        region: S3_REGION,
-        credentials: {
-            accessKeyId: S3_KEY,
-            secretAccessKey: S3_SECRET
-        }
-    });
-    client.meta = {S3_ENDPOINT, S3_ENDPOINT_DOMAIN, S3_REGION, S3_KEY, S3_SECRET, S3_BUCKET}
-    return client;
-}
+
 
 
 exports.uploadFile = async (s3Client, filename, bucketFolder, bucketFileName) => {
@@ -242,3 +246,50 @@ exports.uploadTxtAsHTML = async (data, bucketFolder, bucketFileName, s3Client) =
         return '';
       }      
 };
+
+exports.uploadTxtAsHTML = async (data, bucketFolder, bucketFileName, s3Client) => {
+  let paragraphs = data.split("\n");
+
+  for (i = 0; i < paragraphs.length; ++i) paragraphs[i] = `<p>${paragraphs[i]}</p>`;
+
+  data = paragraphs.join("\n");
+
+    data = `<html><head><body>${data}</body></head></html>`;
+
+    const bucketParams = {
+        Bucket: process.env.S3_BUCKET,
+        Key: `${bucketFolder}/${bucketFileName}`,
+        Body: data,
+        ACL: 'public-read',
+        'ContentType': 'text/html'
+      };
+    
+      try {
+        const data = await s3Client.send(new PutObjectCommand(bucketParams));
+        const link = `https://${process.env.S3_BUCKET}.${process.env.S3_ENDPOINT_DOMAIN}/${bucketParams.Key}`;
+        return link;
+      } catch (err) {
+        console.log("Error", err);
+        return '';
+      }      
+};
+
+exports.uploadTxt = async (data, bucketFolder, bucketFileName) => {
+    const bucketParams = {
+        Bucket: process.env.S3_BUCKET,
+        Key: `${bucketFolder}/${bucketFileName}`,
+        Body: data,
+        ACL: 'public-read',
+        'ContentType': 'text/html'
+      };
+    
+      try {
+        const data = await s3Client.send(new PutObjectCommand(bucketParams));
+        const link = `https://${process.env.S3_BUCKET}.${process.env.S3_ENDPOINT_DOMAIN}/${bucketParams.Key}`;
+        return link;
+      } catch (err) {
+        console.log("Error", err);
+        return '';
+      }      
+};
+

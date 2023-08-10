@@ -109,10 +109,12 @@ const handleQuery = async (req, res) => {
 }
 
 const handleUrlToText = async (req, res) => {
-  const { url } = req.body;
+  const { url, token, bowlId } = req.body;
+  const info = auth.validateToken(token);
+  if (info === false) return res.status(401).json('unautorized')
+  const { accountId, email, username, domain } = info;
 
-  if (!url) return res.status(400).json('bad request');
-
+  if (!url || !bowlId) return res.status(400).json('bad request');
   if (!urlUtil.isValidUrl(url)) return res.status(402).json('bad request');
 
   const urlType = urlUtil.urlType(url);
@@ -121,7 +123,7 @@ const handleUrlToText = async (req, res) => {
   switch (urlType) {
 
     case 'html':
-      const info = await textConversion.htmlToText(url);
+      const info = await textConversion.htmlToText(url, accountId, bowlId);
       info.status = 'success';
       return res.status(200).json(info);
       break;
