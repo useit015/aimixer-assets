@@ -14,6 +14,7 @@ const bcrypt = require("bcrypt");
 const luxon = require('luxon');
 const { v4: uuidv4 } = require('uuid');
 const jwt = require('jsonwebtoken');
+const axios = require('axios');
 
 const serp = require('./utils/serpWow');
 const s3 = require('./utils/s3');
@@ -124,9 +125,7 @@ const handleUrlToText = async (req, res) => {
 
     case 'html':
       const info = await textConversion.htmlToText(url, accountId, bowlId);
-      info.status = 'success';
       return res.status(200).json(info);
-      break;
 
     default:
       console.error('Unknown URL Type: ', urlType);
@@ -136,8 +135,51 @@ const handleUrlToText = async (req, res) => {
   return res.status(200).send(text);
 }
 
+const getInfoRelatedToTopic = async (text, topic) => {
+  const prompt = `"""Below is some Text. Solely using the provided Text, write an article on the following topic: ${topic}. If there is no information on that topic reply "There are no facts."
+    
+  Text:
+  ${text}"""
+`
+  console.log(prompt);
+  let info = await ai.chatGPT(prompt);
+  if (info.length < 100 && info.toLowerCase().indexOf('no facts') !== -1) info = '';
+  return info;
+}
+
+const handleFilterTopics = async (req, res) => {
+  const { token, topics, link, bowlId } = req.body;
+  const info = auth.validateToken(token);
+  if (info === false) return res.status(401).json('unauthorized')
+  const { accountId, email, username, domain } = info;
+
+  if (!bowlId || !link || !topics) return res.status(400).json('bad request');
+
+  try {
+    const response = await axios({
+      url: link,
+      method: 'get'
+    })
+    const topicList = topics.split("\n");
+    const promises = [];
+    for (let i = 0; i < topicList.length; ++i) promises.push(getInfoRelatedToTopic(response.data, topicList[i]))
+    const info = await Promise.all(promises);
+    const text = info.join("\n");
+    const s3Link = await s3.uploadTxt(text, `${accountId}/${bowlId}`, `${uuidv4()}.txt`);
+    let length = text.trim().split(' ').length;
+    if (length <= 2) length = 0;
+    return res.status(200).json({
+      infoLink: s3Link,
+      infoLength: length
+    })
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json('internal server error');
+  }
+}
 app.post('/query', (req, res) => handleQuery(req, res));
 app.post('/urlToText', (req, res) => handleUrlToText(req, res));
+app.post('/filterTopics', (req, res) => handleFilterTopics(req, res));
 
 const httpsServer = https.createServer({
     key: fs.readFileSync(privateKeyPath),

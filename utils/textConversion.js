@@ -17,14 +17,21 @@ exports.htmlToText = async (url, accountId, bowlId) => {
     if (article && article.published) {
         const date = luxon.DateTime.fromISO(article.published).toISODate();
         article.date = date;
-    } else article.date = 'unknown';
+    } else article.date = '';
 
     if (article && article.content) {
         article.text = urlUtil.getTextFromHTML(article.content).replace(/\[http.*\]/g, '');
         article.s3Link = await s3.uploadTxt(article.text, `${accountId}/${bowlId}`, `${uuidv4()}.txt`)
-        
+        return {
+            status: 'success',
+            title: article.title ? article.title : '',
+            date: article.date,
+            link: article.s3Link,
+            type: 'html',
+            subtype: 'url',
+            length: article.text.split(' ').length
+        }
     }
 
-
-    return article;
+    return {status: 'error', msg: 'Could not get HTML'};
 }
