@@ -110,13 +110,26 @@ const handleQuery = async (req, res) => {
   }
 }
 
-const getAssetInfo = async url => {
+const getAssetData = async url => {
   try {
     const urlInfo = new URL(url);
     const fileName = urlInfo.pathname.substring(1);
     const q = `SELECT title, date, type, size, meta FROM assets WHERE file_name = '${fileName}'`;
-    const r = await query(q);
-    return r;
+    let r = await query(q);
+    if (r.length) return r[0];
+
+    let loc = urlInfo.pathname.lastIndexOf('/');
+    let title = loc !== -1 ? urlInfo.pathname.substring(loc+1) : urlInfo.pathname;
+    let date = luxon.DateTime.now().toISODate();
+    let size = -1;
+    let meta = JSON.stringify({});
+    loc = urlInfo.pathname.lastIndexOf('.');
+    let extension = loc !== -1 ? urlInfo.pathname.substring(loc) : '.bin';
+    let type = mimeTypes.lookup(extension);
+
+    return {
+      title, date, type, size, meta
+    }
     
   } catch (err) {
     console.error(err);
@@ -136,7 +149,8 @@ const handleUrlToText = async (req, res) => {
   const urlType = urlUtil.urlType(url);
 
   let text;
-  
+  const data = await getAssetData(url);
+
   switch (urlType) {
 
     case 'html':
@@ -144,10 +158,12 @@ const handleUrlToText = async (req, res) => {
       break;
 
     case 'pdf':
-      info = await getAssetInfo(url);
-      if (!info.length) return res.status(500).json({status: 'error', msg: `could not get asset info for: ${url}`});
-      const { title, date, meta, type, size } = info[0];
-      text = await textConversion.pdfToText(url, title, date, accountId, bowlId);
+      text = await textConversion.pdfToText(url, data.title, data.date, accountId, bowlId);
+      break;
+
+    case 'mp4':
+      console.log('data', data);
+      text = await textConversion.mp4ToText(url, data.title, data.date, accountId, bowlId);
       break;
 
     default:

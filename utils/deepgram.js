@@ -1,5 +1,6 @@
 /*
  * PlayGround: https://playground.deepgram.com/
+ * sudo apt install ffmpeg
  */
 
 require('dotenv').config();
@@ -40,7 +41,6 @@ exports.convertFileToMp4 = fileName => {
 }
 
 exports.convertMp4ToMp3 = fileName => {
-    console.log(fileName);
     return new Promise((resolve, reject) => {
         const loc = fileName.indexOf('.mp4');
         if (loc === -1) return reject ('invalid input file');
@@ -70,14 +70,19 @@ exports.transcribeRecording = async (inputFile, outputFile = null) => {
         };
     
         response = await deepgram.transcription.preRecorded(audioSource, config);
-
+        
         if (outputFile) await fs.promises.writeFile(outputFile, JSON.stringify(response));
+        const text = response.results.channels[0].alternatives[0].transcript;
+        return text;
     } catch (err) {
         console.error('Error [deepgram.js transcribeRecording]:', err.message ? err.message : err);
         return false;
     }
 
-    return response;
+    
+
+    console.log('transcribeRecording SUCCESS');
+    return text;
 }
 
 exports.generateSpeakerBasedTranscript = info => {

@@ -6,6 +6,7 @@ const urlUtil = require('./url')
 const articleExtractor = require('@extractus/article-extractor');
 const s3 = require('./s3');
 const pdf = require('./pdf');
+const deepgram = require('./deepgram');
 
 const textToS3Link = async (text, title, date, accountId, bowlId) => {
     console.log('s3Text', text);
@@ -49,6 +50,22 @@ exports.pdfToText = async (url, title, date, accountId, bowlId) => {
         const text = await pdf.toText(fileName);
         console.log('pdfOutput', text);
         fs.unlink(fileName, () => {});
+        return await textToS3Link(text, title, date, accountId, bowlId);
+    } catch (err) {
+        console.error(err);
+        return {status: 'error', msg: 'Could not get text from PDF'};
+    }
+}
+
+exports.mp4ToText = async (url, title, date, accountId, bowlId) => {
+    try {
+        const fileName = `/tmp/${uuidv4()}.mp4`;
+        let result = await urlUtil.download(url, fileName);
+        const mp3File = await deepgram.convertMp4ToMp3(fileName);
+        const text = await deepgram.transcribeRecording(mp3File);  
+        fs.unlink(fileName, () => {});
+        fs.unlink(mp3File, () => {});
+        console.log('text', text);
         return await textToS3Link(text, title, date, accountId, bowlId);
     } catch (err) {
         console.error(err);
