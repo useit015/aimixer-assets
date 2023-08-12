@@ -15,6 +15,7 @@ const luxon = require('luxon');
 const { v4: uuidv4 } = require('uuid');
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
+const mimeTypes = require('mime-types');
 
 const serp = require('./utils/serpWow');
 const s3 = require('./utils/s3');
@@ -177,9 +178,55 @@ const handleFilterTopics = async (req, res) => {
     return res.status(500).json('internal server error');
   }
 }
+
+const handleUploadFile = async (req, res) => {
+  let { token, bowlId, title, name, type, size, date } = req.body;
+  const info = auth.validateToken(token);
+  if (info === false) return res.status(401).json('unauthorized')
+  const { accountId, email, username, domain } = info;
+
+  if (!bowlId || typeof title === 'undefined' || !name || !type || !size || !date) return res.status(400).json('bad request');
+
+  try {
+    let loc = name.lastIndexOf('.');
+    let extension = loc !== -1 ? name.substr(loc+1) : mimeTypes.extension(type);
+    
+    bowlId = mysql.escape(bowlId);
+    title = mysql.escape(title);
+    
+    date = mysql.escape(date);
+
+    const fileName =`account--${accountId}/assets/${uuidv4()}.${extension}`;
+
+    let q = `INSERT INTO assets (file_name, bowl_id, title, type, size, date, meta) 
+    VALUES ('${fileName}', ${bowlId}, ${title}, ${mysql.escape(type)}, ${size}, ${date}, '${JSON.stringify({})}')`;
+
+    let r = await query(q);
+
+    if (r === false) {
+      console.error('DB Error: ', q);
+      return res.status(500).json('Database Error');
+    }
+
+    const url = await s3.presignedUploadUrl(fileName, type);
+
+    if (r === false) {
+      console.error('S3 Error: ', q);
+      return res.status(500).json('S3 Error');
+    }
+
+    return res.status(200).send(url);
+
+  } catch(err) {
+    console.error(err);
+    return res.status(500).json(err);
+  }
+}
+
 app.post('/query', (req, res) => handleQuery(req, res));
 app.post('/urlToText', (req, res) => handleUrlToText(req, res));
 app.post('/filterTopics', (req, res) => handleFilterTopics(req, res));
+app.post('/uploadFile', (req, res) => handleUploadFile(req, res));
 
 const httpsServer = https.createServer({
     key: fs.readFileSync(privateKeyPath),

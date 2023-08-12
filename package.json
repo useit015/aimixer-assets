@@ -24,6 +24,7 @@
     "https": "^1.0.0",
     "jsonwebtoken": "^9.0.1",
     "luxon": "^3.4.0",
+    "mime-types": "^2.1.35",
     "mysql2": "^3.6.0",
     "node-html-parser": "^6.1.5",
     "openai": "^3.3.0",

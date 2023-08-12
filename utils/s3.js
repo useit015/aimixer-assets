@@ -104,9 +104,8 @@ exports.contentType = filename => {
     return contentType ? contentType : 'application/octet-stream';
 }
 
-exports.presignedUploadUrl = async (s3Client, Key, expiresIn = 900) => {
+exports.presignedUploadUrl = async (Key, ContentType, expiresIn = 900) => {
     const Bucket = s3Client.meta.S3_BUCKET;
-    const ContentType = this.contentType(Key);
     const bucketParams = {Bucket, Key, ContentType};
 
     console.log(bucketParams);
