@@ -59,7 +59,7 @@ exports.convertMp4ToMp3 = fileName => {
     })
 }
 
-exports.transcribeRecording = async (inputFile, outputFile = null) => {
+exports.transcribeRecording = async (inputFile, speakerBased = false) => {
     let response;
     try {
         const mimetype = mime.lookup(inputFile);
@@ -68,11 +68,14 @@ exports.transcribeRecording = async (inputFile, outputFile = null) => {
             stream: fs.createReadStream(inputFile),
             mimetype
         };
+
+        console.log('deepgram config', config);
     
         response = await deepgram.transcription.preRecorded(audioSource, config);
         
         if (outputFile) await fs.promises.writeFile(outputFile, JSON.stringify(response));
-        const text = response.results.channels[0].alternatives[0].transcript;
+        const text = speakerBased ? response.results.channels[0].alternatives[0].paragraphs.transcript : response.results.channels[0].alternatives[0].transcript
+        
         return text;
     } catch (err) {
         console.error('Error [deepgram.js transcribeRecording]:', err.message ? err.message : err);
