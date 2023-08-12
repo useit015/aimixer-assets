@@ -19,6 +19,7 @@
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "fs-extra": "^11.1.1",
+    "fs.promises": "^0.1.2",
     "html-to-text": "^9.0.5",
     "html2plaintext": "^2.1.4",
     "https": "^1.0.0",
@@ -28,6 +29,7 @@
     "mysql2": "^3.6.0",
     "node-html-parser": "^6.1.5",
     "openai": "^3.3.0",
+    "pdf-parse": "^1.1.1",
     "uuid": "^9.0.0"
   }
 }

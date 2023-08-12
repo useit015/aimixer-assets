@@ -110,9 +110,23 @@ const handleQuery = async (req, res) => {
   }
 }
 
+const getAssetInfo = async url => {
+  try {
+    const urlInfo = new URL(url);
+    const fileName = urlInfo.pathname.substring(1);
+    const q = `SELECT title, date, type, size, meta FROM assets WHERE file_name = '${fileName}'`;
+    const r = await query(q);
+    return r;
+    
+  } catch (err) {
+    console.error(err);
+    return false;
+  }
+}
+
 const handleUrlToText = async (req, res) => {
   const { url, token, bowlId } = req.body;
-  const info = auth.validateToken(token);
+  let info = auth.validateToken(token);
   if (info === false) return res.status(401).json('unautorized')
   const { accountId, email, username, domain } = info;
 
@@ -121,20 +135,29 @@ const handleUrlToText = async (req, res) => {
 
   const urlType = urlUtil.urlType(url);
 
-  let text = '';
+  let text;
+  
   switch (urlType) {
 
     case 'html':
-      const info = await textConversion.htmlToText(url, accountId, bowlId);
-      return res.status(200).json(info);
+      text = await textConversion.htmlToText(url, accountId, bowlId);
+      break;
+
+    case 'pdf':
+      info = await getAssetInfo(url);
+      if (!info.length) return res.status(500).json({status: 'error', msg: `could not get asset info for: ${url}`});
+      const { title, date, meta, type, size } = info[0];
+      text = await textConversion.pdfToText(url, title, date, accountId, bowlId);
+      break;
 
     default:
       console.error('Unknown URL Type: ', urlType);
-      return res.status(500).json({status: 'error', msg: `unknown url type: ${urlType}`});
+      return res.status(500).json({status: 'error', msg: `unknown url type: [${urlType}]`});
   }
 
-  return res.status(200).send(text);
+  return res.status(200).json(text);
 }
+
 
 const getInfoRelatedToTopic = async (text, topic) => {
   const prompt = `"""Below is some Text. Solely using the provided Text, write an article on the following topic: ${topic}. If there is no information on that topic reply "There are no facts."

@@ -1,11 +1,26 @@
 const luxon = require('luxon');
 const { v4: uuidv4 } = require('uuid');
+const fs = require('fs');
 
 const urlUtil = require('./url')
 const articleExtractor = require('@extractus/article-extractor');
 const s3 = require('./s3');
+const pdf = require('./pdf');
 
-
+const textToS3Link = async (text, title, date, accountId, bowlId) => {
+    console.log('s3Text', text);
+    const s3Link = await s3.uploadTxt(text, `${accountId}/${bowlId}`, `${uuidv4()}.txt`)
+    return {
+        title,
+        date,
+        status: 'success',
+        link: s3Link,
+        type: 'html',
+        subtype: 'url',
+        length: text.split(' ').length,
+        id: uuidv4()
+    }
+}
 
 exports.htmlToText = async (url, accountId, bowlId) => {
     const html = await urlUtil.scrapeHTML(url);
@@ -21,17 +36,22 @@ exports.htmlToText = async (url, accountId, bowlId) => {
 
     if (article && article.content) {
         article.text = urlUtil.getTextFromHTML(article.content).replace(/\[http.*\]/g, '');
-        article.s3Link = await s3.uploadTxt(article.text, `${accountId}/${bowlId}`, `${uuidv4()}.txt`)
-        return {
-            status: 'success',
-            title: article.title ? article.title : '',
-            date: article.date,
-            link: article.s3Link,
-            type: 'html',
-            subtype: 'url',
-            length: article.text.split(' ').length
-        }
+        return await textToS3Link(article.text, article.title ? article.title : '', article.date, accountId, bowlId);
     }
 
     return {status: 'error', msg: 'Could not get HTML'};
+}
+
+exports.pdfToText = async (url, title, date, accountId, bowlId) => {
+    try {
+        const fileName = `/tmp/${uuidv4()}.pdf`;
+        let result = await urlUtil.download(url, fileName);
+        const text = await pdf.toText(fileName);
+        console.log('pdfOutput', text);
+        fs.unlink(fileName, () => {});
+        return await textToS3Link(text, title, date, accountId, bowlId);
+    } catch (err) {
+        console.error(err);
+        return {status: 'error', msg: 'Could not get text from PDF'};
+    }
 }
