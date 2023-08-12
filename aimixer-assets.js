@@ -63,6 +63,27 @@ app.get('/', (req, res) => {
     
 });
 
+const urlToMp3 = async (url, extension) => {
+ try {
+  const tmpFile = `/tmp/${uuidv4()}.${extension}`;
+  const mp3File = `/tmp/${uuidv4()}.mp3`;
+  exec(`ffmpeg -i ${tmpFile} ${mp3File}`, (error, stdout, stderr) => {
+    if (error) {
+        console.log(error);
+        return resolve(false)
+    }
+    if (stderr) {
+        //console.log(`stderr: ${stderr}`);
+    }
+    fs.unlink(tmpFile, () => {});
+    return resolve(mp3File);
+});
+ } catch (err) {
+  console.error(err);
+  return false;
+ }
+}
+
 const handleQuery = async (req, res) => {
   console.log(req.body);
   const {type, query, timePeriod, token } = req.body;
@@ -146,9 +167,11 @@ const handleUrlToText = async (req, res) => {
   if (!url || !bowlId) return res.status(400).json('bad request');
   if (!urlUtil.isValidUrl(url)) return res.status(402).json('bad request');
 
+  const options = req.body.options ? req.body.options : {};
+
   const urlType = urlUtil.urlType(url);
 
-  let text;
+  let text, mp3File = '';
   const data = await getAssetData(url);
 
   switch (urlType) {
@@ -161,9 +184,26 @@ const handleUrlToText = async (req, res) => {
       text = await textConversion.pdfToText(url, data.title, data.date, accountId, bowlId);
       break;
 
+    case 'mkv':
+    case 'mov':
+    case 'wmv':
+    case 'avi':
+    case 'm4a':
+    case 'flac':
+    case 'wav':
+      mp3File = await urlToMp3(url, urlType);
+      if (!mp3File) return res.status(500).json({status: 'error', msg: `could not create mp3 file`});
+    case 'mp3':
+      if (!mp3File) {
+        mp3File = `/tmp/${uuidv4()}.mp3`;
+        mp3File = await urlUtil.download(url, mp3File);
+      }
+      text = await textConversion.mp3ToText(mp3File, data.title, data.date, accountId, bowlId, options);
+      break;
+
     case 'mp4':
       console.log('data', data);
-      text = await textConversion.mp4ToText(url, data.title, data.date, accountId, bowlId);
+      text = await textConversion.mp4ToText(url, data.title, data.date, accountId, bowlId, options);
       break;
 
     default:

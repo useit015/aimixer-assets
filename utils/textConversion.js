@@ -57,12 +57,12 @@ exports.pdfToText = async (url, title, date, accountId, bowlId) => {
     }
 }
 
-exports.mp4ToText = async (url, title, date, accountId, bowlId) => {
+exports.mp4ToText = async (url, title, date, accountId, bowlId, options) => {
     try {
         const fileName = `/tmp/${uuidv4()}.mp4`;
         let result = await urlUtil.download(url, fileName);
         const mp3File = await deepgram.convertMp4ToMp3(fileName);
-        const text = await deepgram.transcribeRecording(mp3File);  
+        const text = await deepgram.transcribeRecording(mp3File, options && options.speakerTranscript ? options.speakerTranscript : false);  
         fs.unlink(fileName, () => {});
         fs.unlink(mp3File, () => {});
         console.log('text', text);
@@ -71,4 +71,11 @@ exports.mp4ToText = async (url, title, date, accountId, bowlId) => {
         console.error(err);
         return {status: 'error', msg: 'Could not get text from PDF'};
     }
+}
+
+exports.mp3ToText = async (mp3File, title, date, accountId, bowlId, options) => {
+    const text = await deepgram.transcribeRecording(mp3File, options && options.speakerTranscript ? options.speakerTranscript : false);
+    fs.unlink(mp3File, () => {});
+    console.log('text', text);
+    return await textToS3Link(text, title, date, accountId, bowlId);
 }
