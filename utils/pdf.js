@@ -4,7 +4,6 @@
  * https://www.npmjs.com/package/pdfreader : PDF Extractor with Table detection and parsing
 */
 
-
 const fs = require('fs');
 const pdf = require('pdf-parse');
 const { v4: uuidv4 } = require('uuid');
@@ -34,6 +33,4 @@ exports.toText = async fileName => {
         console.error(err);
         return false;
     }
-
-    
 }
