@@ -279,7 +279,7 @@ exports.uploadTxt = async (data, bucketFolder, bucketFileName) => {
         Key: `${bucketFolder}/${bucketFileName}`,
         Body: data,
         ACL: 'public-read',
-        'ContentType': 'text/html'
+        'ContentType': 'text/txt'
       };
     
       try {

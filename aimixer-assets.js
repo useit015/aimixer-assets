@@ -16,6 +16,7 @@ const { v4: uuidv4 } = require('uuid');
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
 const mimeTypes = require('mime-types');
+const { exec } = require("child_process");
 
 const serp = require('./utils/serpWow');
 const s3 = require('./utils/s3');
@@ -63,25 +64,28 @@ app.get('/', (req, res) => {
     
 });
 
-const urlToMp3 = async (url, extension) => {
- try {
-  const tmpFile = `/tmp/${uuidv4()}.${extension}`;
-  const mp3File = `/tmp/${uuidv4()}.mp3`;
-  exec(`ffmpeg -i ${tmpFile} ${mp3File}`, (error, stdout, stderr) => {
-    if (error) {
-        console.log(error);
-        return resolve(false)
-    }
-    if (stderr) {
-        //console.log(`stderr: ${stderr}`);
-    }
-    fs.unlink(tmpFile, () => {});
-    return resolve(mp3File);
-});
- } catch (err) {
-  console.error(err);
-  return false;
- }
+const urlToMp3 = (url, extension) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const tmpFile = `/tmp/${uuidv4()}.${extension}`;
+      await urlUtil.download(url, tmpFile);
+      const mp3File = `/tmp/${uuidv4()}.mp3`;
+      exec(`ffmpeg -i ${tmpFile} ${mp3File}`, (error, stdout, stderr) => {
+        if (error) {
+            console.log(error);
+            return resolve(false)
+        }
+        if (stderr) {
+            //console.log(`stderr: ${stderr}`);
+        }
+        fs.unlink(tmpFile, () => {});
+        return resolve(mp3File);
+    });
+     } catch (err) {
+      console.error(err);
+      return false;
+     }
+  })
 }
 
 const handleQuery = async (req, res) => {
@@ -216,14 +220,18 @@ const handleUrlToText = async (req, res) => {
 
 
 const getInfoRelatedToTopic = async (text, topic) => {
-  const prompt = `"""Below is some Text. Solely using the provided Text, write an article on the following topic: ${topic}. If there is no information on that topic reply "There are no facts."
-    
-  Text:
+  let prompt = `"""Below is some Text. Solely using the provided Text, write an article on the following topic: ${topic}. If there is no information on that topic reply "There are no facts."
+  
   ${text}"""
 `
   console.log(prompt);
   let info = await ai.chatGPT(prompt);
-  if (info.length < 100 && info.toLowerCase().indexOf('no facts') !== -1) info = '';
+  if (info.length < 100 && 
+      (info.toLowerCase().indexOf('no facts') !== -1 || 
+      info.toLowerCase().indexOf('no specific information') !== -1 || 
+      info.toLowerCase().indexOf('no information') !== -1
+  )) info = '';
+  console.log(info);
   return info;
 }
 
@@ -302,10 +310,35 @@ const handleUploadFile = async (req, res) => {
   }
 }
 
+const handleUpdateLink = async (req, res) => {
+  let { token, link, content } = req.body;
+  const info = auth.validateToken(token);
+  if (info === false) return res.status(401).json('unauthorized')
+  const { accountId, email, username, domain } = info;
+
+  try {
+    const urlInfo = new URL(link);
+    const loc = urlInfo.pathname.lastIndexOf('/');
+    if (loc === -1) return res.status(500).json('internal server error 002');
+    const folder = urlInfo.pathname.substring(1, loc);
+    const fileName = urlInfo.pathname.substring(loc+1);
+    console.log(folder, fileName);
+    const result = await s3.uploadTxt(content, folder, fileName);
+    console.log(link);
+    console.log(result);
+    if (result !== link) return res.status(500).json('insert server error 003');
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json('internal server error');
+  }
+
+}
+
 app.post('/query', (req, res) => handleQuery(req, res));
 app.post('/urlToText', (req, res) => handleUrlToText(req, res));
 app.post('/filterTopics', (req, res) => handleFilterTopics(req, res));
 app.post('/uploadFile', (req, res) => handleUploadFile(req, res));
+app.post('/updateLink', (req, res) => handleUpdateLink(req, res));
 
 const httpsServer = https.createServer({
     key: fs.readFileSync(privateKeyPath),
