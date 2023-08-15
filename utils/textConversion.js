@@ -10,7 +10,7 @@ const pdf = require('./pdf');
 const deepgram = require('./deepgram');
 const axios = require('axios');
 
-exports.textToS3Link = async (text, title, date, accountId, bowlId) => {
+exports.textToS3Link = async (text, title, date, accountId, bowlId, origURL = '') => {
     console.log('s3Text', text);
     const s3Link = await s3.uploadTxt(text, `${accountId}/${bowlId}`, `${uuidv4()}.txt`)
     return {
@@ -21,6 +21,7 @@ exports.textToS3Link = async (text, title, date, accountId, bowlId) => {
         type: 'html',
         subtype: 'url',
         length: text.split(' ').length,
+        origURL,
         id: uuidv4()
     }
 }
@@ -75,7 +76,7 @@ exports.htmlToText = async (url, accountId, bowlId) => {
 
     if (article && article.content) {
         article.text = urlUtil.getTextFromHTML(article.content).replace(/\[http.*\]/g, '');
-        return await exports.textToS3Link(article.text, article.title ? article.title : '', article.date, accountId, bowlId);
+        return await exports.textToS3Link(article.text, article.title ? article.title : '', article.date, accountId, bowlId, url);
     }
 
     return {status: 'error', msg: 'Could not get HTML'};
