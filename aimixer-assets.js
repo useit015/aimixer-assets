@@ -1,6 +1,6 @@
 require('dotenv').config();
 
-const listenPort = 5002;
+const listenPort = process.argv.length === 2 ? 5002 : 6002;
 const hostname = 'assets.aimixer.io'
 const privateKeyPath = `/etc/sslkeys/aimixer.io/aimixer.io.key`;
 const fullchainPath = `/etc/sslkeys/aimixer.io/aimixer.io.pem`;
@@ -162,6 +162,16 @@ const getAssetData = async url => {
   }
 }
 
+const handleTextToUrl = async (req, res) => {
+  const { text, token, bowlId } = req.body;
+  let info = auth.validateToken(token);
+  if (info === false) return res.status(401).json('unautorized')
+  const { accountId, email, username, domain } = info;
+
+  const response = await textConversion.textToS3Link(text, text.substring(0, 20) + '...', luxon.DateTime.now().toISODate(), accountId, bowlId);
+  return res.status(200).json(response);
+}
+
 const handleUrlToText = async (req, res) => {
   const { url, token, bowlId } = req.body;
   let info = auth.validateToken(token);
@@ -181,7 +191,7 @@ const handleUrlToText = async (req, res) => {
   switch (urlType) {
 
     case 'html':
-      text = await textConversion.htmlToText(url, accountId, bowlId);
+      text = await textConversion.htmlToText(url, accountId, bowlId, options);
       break;
 
     case 'pdf':
@@ -327,6 +337,7 @@ const handleUpdateLink = async (req, res) => {
     console.log(link);
     console.log(result);
     if (result !== link) return res.status(500).json('insert server error 003');
+    return res.status(200).json('ok');
   } catch (err) {
     console.error(err);
     return res.status(500).json('internal server error');
@@ -336,6 +347,7 @@ const handleUpdateLink = async (req, res) => {
 
 app.post('/query', (req, res) => handleQuery(req, res));
 app.post('/urlToText', (req, res) => handleUrlToText(req, res));
+app.post('/textToUrl', (req, res) => handleTextToUrl(req, res));
 app.post('/filterTopics', (req, res) => handleFilterTopics(req, res));
 app.post('/uploadFile', (req, res) => handleUploadFile(req, res));
 app.post('/updateLink', (req, res) => handleUpdateLink(req, res));
