@@ -247,18 +247,20 @@ const getInfoRelatedToTopic = async (text, topic) => {
 }
 
 const getFactsRelatedToTopic = async (text, topic) => {
-
-  let prompt = `Below is some Text. I need you return ${nlp.numSentences(text)} facts from the text that are relevant to the following topic: ${topic}. Solely return facts that are relevant to that topic.
-  Also return ${nlp.numQuotes(text)} third-party quotes that are related to the following topic: ${topic}.
-  Also return 5 links related to the topic of: ${topic}.
+  const numSentences = nlp.numSentences(text);
+  const numQuotes = nlp.numQuotes(text);
+  let numLinks = nlp.numLinks(text);
+  let prompt = `Below is some Text. I need you return ${numSentences} facts from the text that are relevant to the following topic: ${topic}. Solely return facts that are relevant to that topic.
+  Also return ${numQuotes} third-party quotes that are related to the following topic: ${topic}.
+  Also return ${numLinks} links related to the topic of: ${topic}.
   The return format must be stringified JSON in the following format: {
-    facts: array of 20 facts that related to the topic ${topic} goes here,
-    quotes: array of 10 quotes in the following format {
+    facts: array of ${numSentences} facts that related to the topic ${topic} goes here,
+    quotes: array of ${numQuotes} quotes in the following format {
       speaker: the identity of the speaker goes here,
       affiliation: the organization that the speaker is affiliated with goes here,
       quote: the speaker's quote goes here
     },
-  links: Array of 5 links in markdown format goes here
+  links: Array of ${numLinks} links in markdown format goes here
   }
 
 Text:

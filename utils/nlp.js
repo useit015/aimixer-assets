@@ -12,6 +12,14 @@ exports.getSentences  = (text) => {
 
 exports.numSentences = text => this.getSentences(text).length;
 
+exports.numQuotes = text => Math.floor(text.split('"').length / 2);
+
+exports.numLinks = text => {
+    const links = text.match(/\[.*\]\(http.*\)/g);
+    //console.log('Links', links);
+    return links.length;
+}
+
 exports.numGpt3Tokens = text => {
     const encoded = encode(text);
 
