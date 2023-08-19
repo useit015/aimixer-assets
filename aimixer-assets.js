@@ -172,8 +172,8 @@ const handleTextToUrl = async (req, res) => {
   return res.status(200).json(response);
 }
 
-const handleUrlToText = async (req, res) => {
-  const { url, token, bowlId } = req.body;
+const handleUrlToText = async (req, res, markdown = false) => {
+  const { url, token, bowlId, markdown } = req.body;
   let info = auth.validateToken(token);
   if (info === false) return res.status(401).json('unautorized')
   const { accountId, email, username, domain } = info;
@@ -191,7 +191,8 @@ const handleUrlToText = async (req, res) => {
   switch (urlType) {
 
     case 'html':
-      text = await textConversion.htmlToText(url, accountId, bowlId, options);
+      if (markdown) text = await textConversion.urlToMarkdown(url);
+      else text = await textConversion.htmlToText(url, accountId, bowlId, options);
       break;
 
     case 'pdf':

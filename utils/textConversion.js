@@ -10,6 +10,23 @@ const pdf = require('./pdf');
 const deepgram = require('./deepgram');
 const axios = require('axios');
 
+exports.fetchHTML = async (url) => {
+    try {
+        const urlInfo = new URL(url);
+        const test = urlInfo.hostname.indexOf('nyc3.digitaloceanspaces.com');
+        if (test === -1) html = await urlUtil.scrapeHTML(url);
+        else {
+            const response = await axios.get(url);
+            html = response.data;
+        }
+        console.log('html', html);
+        return html;
+    } catch(err) {
+        console.error(err);
+        return false;
+    }
+} 
+
 exports.textToS3Link = async (text, title, date, accountId, bowlId, origURL = '') => {
     console.log('s3Text', text);
     const s3Link = await s3.uploadTxt(text, `${accountId}/${bowlId}`, `${uuidv4()}.txt`)
@@ -28,19 +45,7 @@ exports.textToS3Link = async (text, title, date, accountId, bowlId, origURL = ''
 
 exports.htmlToText = async (url, accountId, bowlId) => {
     let html, article;
-    try {
-        const urlInfo = new URL(url);
-        const test = urlInfo.hostname.indexOf('nyc3.digitaloceanspaces.com');
-        if (test === -1) html = await urlUtil.scrapeHTML(url);
-        else {
-            const response = await axios.get(url);
-            html = response.data;
-        }
-        console.log('html', html);
-    } catch(err) {
-        console.error(err);
-        return {status: 'error', msg: 'Could not get HTML'};
-    }
+    html = await exports.fetchHTML(url);
     //return {status: 'error', msg: 'Could not get HTML'};
    
     if (!html) return {status: 'error', msg: 'Could not get HTML'};
@@ -81,6 +86,54 @@ exports.htmlToText = async (url, accountId, bowlId) => {
 
     return {status: 'error', msg: 'Could not get HTML'};
 }
+
+exports.urlToMarkdown = async (url, accountId, bowlId) => {
+    let html, article;
+    html = await this.fetchHTML(url);
+    //return {status: 'error', msg: 'Could not get HTML'};
+   
+    if (!html) return {status: 'error', msg: 'Could not get HTML'};
+
+    // see also https://apify.com/lukaskrivka/article-extractor-smart
+    article = await articleExtractor.extractFromHtml(html, url);
+    console.log(article);
+    return {status: 'error', msg: 'Could not get HTML'};
+    
+    if (!article) {
+        const text = convert(html, {
+            selectors: [
+              { selector: 'a', options: { ignoreHref: true } },
+              { selector: 'a.button', format: 'skip' }
+            ]
+          });
+          article = {
+            content: text,
+            html,
+            date: luxon.DateTime.now().toISODate(),
+            published: luxon.DateTime.now().toISODate(),
+            title: 'Seed'
+          }
+    }
+    console.log('article', article);
+
+    if (article && article.published) {
+        try {
+            const date = luxon.DateTime.fromISO(article.published).toISODate();
+            article.date = date;
+        } catch(err) {
+            article.date = luxon.DateTime.now().toISODate();
+        }
+        
+    } else article.date = '';
+
+    if (article && article.content) {
+        article.text = urlUtil.getTextFromHTML(article.content).replace(/\[http.*\]/g, '');
+        return await exports.textToS3Link(article.text, article.title ? article.title : '', article.date, accountId, bowlId, url);
+    }
+
+    return {status: 'error', msg: 'Could not get HTML'};
+}
+
 
 exports.pdfToText = async (url, title, date, accountId, bowlId) => {
     try {
