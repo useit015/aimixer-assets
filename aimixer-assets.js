@@ -25,6 +25,7 @@ const urlUtil = require('./utils/url')
 const proxycurl = require('./utils/proxycurl');
 const auth = require('./utils/auth')
 const textConversion = require('./utils/textConversion');
+const nlp = require('./utils/nlp');
 
 const { MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE, JWT_PASSWORD } = process.env;
 
@@ -245,6 +246,30 @@ const getInfoRelatedToTopic = async (text, topic) => {
   return info;
 }
 
+const getFactsRelatedToTopic = async (text, topic) => {
+
+  let prompt = `Below is some Text. I need you return ${nlp.numSentences(text)} facts from the text that are relevant to the following topic: ${topic}. Solely return facts that are relevant to that topic.
+  Also return ${nlp.numQuotes(text)} third-party quotes that are related to the following topic: ${topic}.
+  Also return 5 links related to the topic of: ${topic}.
+  The return format must be stringified JSON in the following format: {
+    facts: array of 20 facts that related to the topic ${topic} goes here,
+    quotes: array of 10 quotes in the following format {
+      speaker: the identity of the speaker goes here,
+      affiliation: the organization that the speaker is affiliated with goes here,
+      quote: the speaker's quote goes here
+    },
+  links: Array of 5 links in markdown format goes here
+  }
+
+Text:
+${text}"""
+`
+  console.log(prompt);
+  let info = await ai.chatJSON(prompt);
+
+  return info;
+}
+
 const handleFilterTopics = async (req, res) => {
   const { token, topics, link, bowlId } = req.body;
   const info = auth.validateToken(token);
@@ -275,6 +300,31 @@ const handleFilterTopics = async (req, res) => {
     return res.status(500).json('internal server error');
   }
 }
+
+const handleTopicsToFacts = async (req, res) => {
+  const { token, topics, link, bowlId } = req.body;
+  const info = auth.validateToken(token);
+  if (info === false) return res.status(401).json('unauthorized')
+  const { accountId, email, username, domain } = info;
+
+  if (!bowlId || !link || !topics) return res.status(400).json('bad request');
+
+  try {
+    const response = await axios({
+      url: link,
+      method: 'get'
+    })
+    const topicList = topics.split("\n");
+    const promises = [];
+    for (let i = 0; i < topicList.length; ++i) promises.push(getFactsRelatedToTopic(response.data, topicList[i]))
+    const info = await Promise.all(promises);
+    res.status(200).json(info);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json('internal server error');
+  }
+}
+
 
 const handleUploadFile = async (req, res) => {
   let { token, bowlId, title, name, type, size, date } = req.body;
@@ -344,10 +394,12 @@ const handleUpdateLink = async (req, res) => {
   }
 }
 
+
 app.post('/query', (req, res) => handleQuery(req, res));
 app.post('/urlToText', (req, res) => handleUrlToText(req, res));
 app.post('/textToUrl', (req, res) => handleTextToUrl(req, res));
 app.post('/filterTopics', (req, res) => handleFilterTopics(req, res));
+app.post('/topicsToFacts', (req, res) => handleTopicsToFacts(req, res));
 app.post('/uploadFile', (req, res) => handleUploadFile(req, res));
 app.post('/updateLink', (req, res) => handleUpdateLink(req, res));
 
