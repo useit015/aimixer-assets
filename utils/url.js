@@ -73,6 +73,7 @@ exports.scrapeHTML = async (url, debugMe = false) => {
       response = await axios(request);
     } catch (err) {
       console.log('Error getHTML', url);
+      console.error(err);
       return false;
     }
 

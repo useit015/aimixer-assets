@@ -172,7 +172,7 @@ const handleTextToUrl = async (req, res) => {
   return res.status(200).json(response);
 }
 
-const handleUrlToText = async (req, res, markdown = false) => {
+const handleUrlToText = async (req, res) => {
   const { url, token, bowlId, markdown } = req.body;
   let info = auth.validateToken(token);
   if (info === false) return res.status(401).json('unautorized')
@@ -191,8 +191,7 @@ const handleUrlToText = async (req, res, markdown = false) => {
   switch (urlType) {
 
     case 'html':
-      if (markdown) text = await textConversion.urlToMarkdown(url);
-      else text = await textConversion.htmlToText(url, accountId, bowlId, options);
+      text = await textConversion.htmlUrlToText(url, accountId, bowlId, options);
       break;
 
     case 'pdf':
@@ -343,7 +342,6 @@ const handleUpdateLink = async (req, res) => {
     console.error(err);
     return res.status(500).json('internal server error');
   }
-
 }
 
 app.post('/query', (req, res) => handleQuery(req, res));

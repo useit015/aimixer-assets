@@ -273,13 +273,16 @@ exports.uploadTxtAsHTML = async (data, bucketFolder, bucketFileName, s3Client) =
       }      
 };
 
-exports.uploadTxt = async (data, bucketFolder, bucketFileName) => {
+exports.uploadTxt = async (data, bucketFolder, bucketFileName, type = 'txt') => {
+
+    data = data.replaceAll('â€”', `"'"`).replaceAll('â€', "'");
+
     const bucketParams = {
         Bucket: process.env.S3_BUCKET,
         Key: `${bucketFolder}/${bucketFileName}`,
         Body: data,
         ACL: 'public-read',
-        'ContentType': 'text/txt'
+        'ContentType': `text/${type}`
       };
     
       try {
