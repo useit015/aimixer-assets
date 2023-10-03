@@ -65,7 +65,7 @@ exports.scrapeHTML = async (url, debugMe = false) => {
       }
     }
 
-    console.log(request);
+    if (debugMe) console.log(request);
   
     let response;
   

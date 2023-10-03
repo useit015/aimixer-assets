@@ -14,6 +14,8 @@ const { v4: uuidv4 } = require('uuid');
 var path = require('path');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
+const mysql = require('./mysql');
+
 const {S3_ENDPOINT, S3_ENDPOINT_DOMAIN, S3_REGION, S3_KEY, S3_SECRET, S3_BUCKET} = process.env;
 
 exports.client = (S3_ENDPOINT, S3_ENDPOINT_DOMAIN, S3_REGION, S3_KEY, S3_SECRET, S3_BUCKET) => {
@@ -282,7 +284,7 @@ exports.uploadTxt = async (data, bucketFolder, bucketFileName, type = 'txt') => 
         Key: `${bucketFolder}/${bucketFileName}`,
         Body: data,
         ACL: 'public-read',
-        'ContentType': `text/${type}`
+        'ContentType': type === 'json' ? 'application/json'  : `text/${type}`
       };
     
       try {
@@ -294,4 +296,40 @@ exports.uploadTxt = async (data, bucketFolder, bucketFileName, type = 'txt') => 
         return '';
       }      
 };
+
+exports.addFile = async (data, meta, accountId, bowlId, fileName, contentType) => {
+  data = data.replaceAll(/[”“]/g, '"')
+  .replaceAll('—', '-')
+  .replaceAll(/[‘’]/g, "'")
+  .replaceAll(/[…]/g, '...')
+  .replaceAll(/[ ]/g, '');
+
+  console.log('DATA', data);
+
+  meta = mysql.mysql.escape(JSON.stringify(meta));
+
+  const q = `INSERT INTO files (name, account_id, bowl_id, meta) VALUES ('${fileName}', '${accountId}', '${bowlId}', ${meta})`;
+  const bucketParams = {
+      Bucket: process.env.S3_BUCKET,
+      Key: `${accountId}/${bowlId}/${fileName}`,
+      Body: data,
+      ACL: 'public-read',
+      'CharSet': 'utf-8',
+      'ContentType': contentType
+    };
+  
+    try {
+      const info = await s3Client.send(new PutObjectCommand(bucketParams));
+      if (info) {
+        const link = `https://${process.env.S3_BUCKET}.${process.env.S3_ENDPOINT_DOMAIN}/${bucketParams.Key}`;
+        const result = await mysql.query(q);
+        return result ? link : false;
+      }
+     
+    } catch (err) {
+      console.log("Error", err);
+      return false;
+    }      
+
+}
 

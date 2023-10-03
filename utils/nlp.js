@@ -16,8 +16,8 @@ exports.numQuotes = text => Math.floor(text.split('"').length / 2);
 
 exports.numLinks = text => {
     const links = text.match(/\[.*\]\(http.*\)/g);
-    //console.log('Links', links);
-    return links.length;
+    console.log('Links', links);
+    return links ? links.length : 0;
 }
 
 exports.numGpt3Tokens = text => {

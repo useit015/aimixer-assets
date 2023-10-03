@@ -1,6 +1,6 @@
 require('dotenv').config();
 
-const listenPort = process.argv.length === 2 ? 5002 : 6002;
+const listenPort = process.argv.length === 2 ? 5002 : 5302;
 const hostname = 'assets.aimixer.io'
 const privateKeyPath = `/etc/sslkeys/aimixer.io/aimixer.io.key`;
 const fullchainPath = `/etc/sslkeys/aimixer.io/aimixer.io.pem`;
@@ -9,7 +9,7 @@ const express = require('express');
 const https = require('https');
 const cors = require('cors');
 const fs = require('fs');
-const mysql = require('mysql2');
+const mysql = require('./utils/mysql');
 const bcrypt = require("bcrypt");
 const luxon = require('luxon');
 const { v4: uuidv4 } = require('uuid');
@@ -27,33 +27,6 @@ const auth = require('./utils/auth')
 const textConversion = require('./utils/textConversion');
 const nlp = require('./utils/nlp');
 
-const { MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE, JWT_PASSWORD } = process.env;
-
-const mysqlOptions = {
-  host: MYSQL_HOST,
-  user: MYSQL_USER,
-  password: MYSQL_PASSWORD,
-  database: MYSQL_DATABASE,
-  waitForConnections: true,
-  connectionLimit: 10,
-  maxIdle: 10, // max idle connections, the default value is the same as `connectionLimit`
-  idleTimeout: 60000, // idle connections timeout, in milliseconds, the default value 60000
-  queueLimit: 0,
-  enableKeepAlive: true,
-  keepAliveInitialDelay: 0
-}
-
-const pool = mysql.createPool(mysqlOptions);
-
-const query = q => {
-  return new Promise((resolve, reject) => {
-    pool.query(q, function(err, rows, fields) {
-      console.error(err);
-      if (err) return resolve(false);
-      resolve(rows)
-    });
-  })
-}
 
 const app = express();
 app.use(express.static('public'));
@@ -141,7 +114,7 @@ const getAssetData = async url => {
     const urlInfo = new URL(url);
     const fileName = urlInfo.pathname.substring(1);
     const q = `SELECT title, date, type, size, meta FROM assets WHERE file_name = '${fileName}'`;
-    let r = await query(q);
+    let r = await mysql.query(q);
     if (r.length) return r[0];
 
     let loc = urlInfo.pathname.lastIndexOf('/');
@@ -231,9 +204,10 @@ const handleUrlToText = async (req, res) => {
 
 
 const getInfoRelatedToTopic = async (text, topic) => {
-  let prompt = `"""Below is some Text. Solely using the provided Text, write an article on the following topic: ${topic}. If there is no information on that topic reply "There are no facts."
+  let prompt = `"""Below is some Text. Solely using the provided Text, write an article on the following topic: ${topic}."
   
-  ${text}"""
+Text:
+${text}"""
 `
   console.log(prompt);
   let info = await ai.chatGPT(prompt);
@@ -353,7 +327,7 @@ const handleUploadFile = async (req, res) => {
     let q = `INSERT INTO assets (file_name, bowl_id, title, type, size, date, meta) 
     VALUES ('${fileName}', ${bowlId}, ${title}, ${mysql.escape(type)}, ${size}, ${date}, '${JSON.stringify({})}')`;
 
-    let r = await query(q);
+    let r = await mysql.query(q);
 
     if (r === false) {
       console.error('DB Error: ', q);
@@ -399,6 +373,129 @@ const handleUpdateLink = async (req, res) => {
   }
 }
 
+const handleUrlToFacts = async (req, res) => {
+  const { url, token, bowlId } = req.body;
+  let info = auth.validateToken(token);
+  if (info === false) return res.status(401).json('unautorized')
+  const { accountId, email, username, domain } = info;
+
+  if (!url || !bowlId) return res.status(400).json('bad request');
+  if (!urlUtil.isValidUrl(url)) return res.status(402).json('bad request');
+
+  const options = req.body.options ? req.body.options : {};
+
+  const urlType = urlUtil.urlType(url);
+
+  let text, mp3File = '';
+  const data = await getAssetData(url);
+
+  switch (urlType) {
+
+    case 'html':
+      text = await textConversion.htmlUrlToFacts(url, accountId, bowlId, options);
+      break;
+
+    case 'pdf':
+      // text = await textConversion.pdfToText(url, data.title, data.date, accountId, bowlId);
+      break;
+
+    case 'mkv':
+    case 'mov':
+    case 'wmv':
+    case 'avi':
+    case 'm4a':
+    case 'flac':
+    case 'wav':
+      // mp3File = await urlToMp3(url, urlType);
+      // if (!mp3File) return res.status(500).json({status: 'error', msg: `could not create mp3 file`});
+    case 'mp3':
+      // if (!mp3File) {
+      //   mp3File = `/tmp/${uuidv4()}.mp3`;
+      //   mp3File = await urlUtil.download(url, mp3File);
+      // }
+      // text = await textConversion.mp3ToText(mp3File, data.title, data.date, accountId, bowlId, options);
+      break;
+
+    case 'mp4':
+      // console.log('data', data);
+      // text = await textConversion.mp4ToText(url, data.title, data.date, accountId, bowlId, options);
+      break;
+
+    default:
+      console.error('Unknown URL Type: ', urlType);
+      return res.status(500).json({status: 'error', msg: `unknown url type: [${urlType}]`});
+  }
+
+  return res.status(200).json(text);
+}
+
+/*
+ * Convert URL to md, csv, or json
+ * Title and Date are stored as meta information (if known)
+ */
+
+const handleUrlToAsset = async (req, res) => {
+  let { url, token, bowlId, context } = req.body;
+  let info, accountId, email, username, domain;
+
+  if (!bowlId === process.env.TEST_BOWL) {
+    info = auth.validateToken(token);
+    if (info === false) return res.status(401).json('unautorized')
+    accountId = info.accountId;
+    email = info.email;
+    username = info.username;
+    domain = info.domain;
+  } else {
+    accountId = 'testAccount';
+    bowlId = 'testBowl';
+  }
+
+  if (!url || !bowlId) return res.status(400).json('bad request');
+  if (!urlUtil.isValidUrl(url)) return res.status(402).json('bad url');
+
+  const urlType = urlUtil.urlType(url);
+  if (typeof context === 'undefined') context = '';
+
+  let link, csv, json, mp3File = '';
+
+  switch (urlType) {
+    case 'html':
+      link = await textConversion.htmlUrlToMarkdown(url, accountId, bowlId, context);
+      break;
+
+    case 'pdf':
+      // text = await textConversion.pdfToText(url, data.title, data.date, accountId, bowlId);
+      break;
+
+    case 'mkv':
+    case 'mov':
+    case 'wmv':
+    case 'avi':
+    case 'm4a':
+    case 'flac':
+    case 'wav':
+      // mp3File = await urlToMp3(url, urlType);
+      // if (!mp3File) return res.status(500).json({status: 'error', msg: `could not create mp3 file`});
+    case 'mp3':
+      // if (!mp3File) {
+      //   mp3File = `/tmp/${uuidv4()}.mp3`;
+      //   mp3File = await urlUtil.download(url, mp3File);
+      // }
+      // text = await textConversion.mp3ToText(mp3File, data.title, data.date, accountId, bowlId, options);
+      break;
+
+    case 'mp4':
+      // console.log('data', data);
+      // text = await textConversion.mp4ToText(url, data.title, data.date, accountId, bowlId, options);
+      break;
+
+    default:
+      console.error('Unknown URL Type: ', urlType);
+      return res.status(500).json(link);
+  }
+
+  return res.status(200).json(link);
+}
 
 app.post('/query', (req, res) => handleQuery(req, res));
 app.post('/urlToText', (req, res) => handleUrlToText(req, res));
@@ -407,6 +504,8 @@ app.post('/filterTopics', (req, res) => handleFilterTopics(req, res));
 app.post('/topicsToFacts', (req, res) => handleTopicsToFacts(req, res));
 app.post('/uploadFile', (req, res) => handleUploadFile(req, res));
 app.post('/updateLink', (req, res) => handleUpdateLink(req, res));
+app.post('/urlToFacts', (req, res) => handleUrlToFacts(req, res));
+app.post('/urlToMarkdown', (req, res) => handleUrlToAsset(req, res));
 
 const httpsServer = https.createServer({
     key: fs.readFileSync(privateKeyPath),
